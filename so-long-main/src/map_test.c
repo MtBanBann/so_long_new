@@ -30,6 +30,7 @@ int map_test(char **argv)
 	line = get_next_line(fd);
 	if (!line)
 	{
+		close(fd);
 		ft_dprintf(2, "so_long: error for read map get_next_line");
 		exit(EXIT_FAILURE);
 	}
@@ -62,45 +63,47 @@ int map_test(char **argv)
 int map_tab(char **argv, size_t len)
 {
 	char *line;
-	t_map *so_map;
 	int fd;
+	t_map *so_map;
 	size_t y;
 	
 	y = 0;
+	so_map = initialize_map(len);
 	fd = open(argv[1], O_RDONLY);
 	if (fd < 0)
 	{
 		ft_dprintf(2, "so_long: %s: %s\n", argv[1], strerror(errno));
 		exit(EXIT_FAILURE);
 	}
-	initialize_map(len);
-	vars.map->map = malloc(sizeof(char *) * (len));
-	if (!vars.map->map)
-	{
-		if (close(fd) == -1)
-		{
-			ft_dprintf(2, "so_long: %s: %s\n", argv[1], strerror(errno));
-			exit(EXIT_FAILURE);
-		}
-		ft_dprintf(2, "so_long: %s: %s\n", argv[1], strerror(errno));
-		exit(EXIT_FAILURE);
-	}
 	line = get_next_line(fd);
 	while (line)
 	{
-		vars.map->map[y++] = ft_strdup_long(line);
+		printf("%s\n",line);
+		so_map->map[y++] = ft_strdup_long(line);
+		if(!so_map->map[y - 1])
+		{
+			free_tab(so_map->map);
+			free(so_map);
+			ft_dprintf(2, "so_long : Error filling map");
+			close(fd);
+			exit(EXIT_FAILURE);
+		}
 		free(line);
 		line = get_next_line(fd);
 	}
+	so_map->map[y] = NULL;
 	if (close(fd) == -1)
 	{
+		free_tab(so_map->map);
+		free(so_map);
 		ft_dprintf(2, "so_long: %s: %s\n", argv[1], strerror(errno));
 		exit(EXIT_FAILURE);
 	}
+	printf("%ld\n", len);
 	free(line);
-	map_valid(vars, len);
-	map_duplicate(vars, len);
-	open_window(vars);
+	map_valid(so_map, len);
+	map_duplicate(so_map, len);
+	open_window(so_map);
 	return (0);
 }
 t_map	*initialize_map(size_t len)
@@ -109,43 +112,55 @@ t_map	*initialize_map(size_t len)
 
 	new_map = malloc(sizeof(t_map));
 	if(!new_map)
-		return (NULL);
-	new_map->map = malloc(sizeof(char *) * (len));
+	{
+		ft_dprintf(2, "so_long : Error malloc new_map");
+		exit(EXIT_FAILURE);
+	}
+	new_map->map = malloc(sizeof(char *) * (len + 1)); 
 	if(!new_map->map)
-		return(free(new_map), NULL);
+	{
+		ft_dprintf(2, "so_long : Error malloc new_map");
+		free(new_map);
+		exit(EXIT_FAILURE);
+	}
 	new_map->width = 0;
 	new_map->height = 0;
+	new_map->collectible = 0;
+	new_map->height_e = 0;
+	new_map->width_e = 0;
 	return (new_map);
 }
 
 
-int map_valid(t_vars vars, size_t len)
+int map_valid(t_map *so_map, size_t len)
 {
 	size_t i;
 	size_t y;
 
 	i = 0;
 	y = 0;
-	vars.map->width = strlen(vars.map->map[0]);
-	printf("%ldbitttteeee\n",vars.map->width);
+	so_map->width = strlen(so_map->map[0]);
 	while (i < len-1)
 	{
-		
-		while (vars.map->map[i][y])
+		while (so_map->map[i][y])
 		{	
 			
-			if ((i == 0 || i == len - 1) && y < vars.map->width - 2)
+			if ((i == 0 || i == len - 1) && y < so_map->width - 2)
 			{
 				
-				if(vars.map->map[i][y] != '1')
+				if(so_map->map[i][y] != '1')
 				{
 					printf("haut ou bas mauvais");
+					free_tab(so_map->map);
+					free(so_map);
 					exit(EXIT_FAILURE);
 				}
 			}
-			else if(vars.map->map[i][0] != '1' || vars.map->map[i][vars.map->width - 2] != '1')
+			else if(so_map->map[i][0] != '1' || so_map->map[i][so_map->width - 2] != '1')
 			{
 				printf("coter mauvais");
+				free_tab(so_map->map);
+				free(so_map);
 				exit(EXIT_FAILURE);	
 			}
 			y++;
@@ -153,7 +168,47 @@ int map_valid(t_vars vars, size_t len)
 		y = 0;
 		i++;
 	}
+	map_valide_collectible(so_map, len, 0, 0);
 	return (0);
+}
+
+void map_valide_collectible(t_map *so_map, size_t len, int nb_e, int nb_p)
+{
+	size_t i;
+	size_t y;
+
+	i = 0;
+	y = 0;
+	while (i < len-1)
+	{
+		while (so_map->map[i][y])
+		{
+			if (so_map->map[i][y] == 'C')
+				so_map->collectible += 1;
+			if (so_map->map[i][y] == 'E')
+			{
+				so_map->height_e = i;
+				so_map->width_e= y;
+				printf("%ld %ld",i,y);
+				nb_e++;
+			}
+			if (so_map->map[i][y] == 'P')
+				nb_p++;
+			y++;
+		}
+		y = 0;
+		i++;
+	}
+	if (so_map->collectible == 0 || nb_e != 1 || nb_p != 1)
+		free_so_map(so_map);
+}
+
+void free_so_map(t_map *so_map)
+{
+	ft_dprintf(2, "Map invalide");
+	free_tab(so_map->map);
+	free(so_map);
+	exit(EXIT_FAILURE);	
 }
 
 char	*ft_strdup_long(const char *s)
@@ -184,5 +239,20 @@ size_t	ft_strlen_so_long(const char *str)
 	while (str[i] && str[i] != '\n')
 		i++;
 	return (i);
+}
+
+void	free_tab(char **tab)
+{
+	size_t	i;
+
+	i = 0;
+	if (!tab)
+		return ;
+	while (tab[i])
+	{
+		free(tab[i]);
+		i++;
+	}
+	free(tab);
 }
 
